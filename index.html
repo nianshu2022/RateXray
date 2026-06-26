@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RateXray 汇率透视镜 - 多链路海外支付成本与损耗审计</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=3.0">
+</head>
+<body>
+    <!-- Sidebar/Header Panel -->
+    <header class="app-header">
+        <div class="logo-area">
+            <div class="logo-icon">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="url(#logo-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M12 6V12L16 14" stroke="var(--accent-glow)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M7.5 12H7.51" stroke="var(--emerald)" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M16.5 12H16.51" stroke="var(--emerald)" stroke-width="3" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="logo-grad" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                            <stop stop-color="var(--accent-glow)"/>
+                            <stop offset="1" stop-color="var(--emerald)"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <div>
+                <h1>RateXray <span class="badge">v1.2</span></h1>
+                <p class="tagline">海外多链路支付成本与损耗审计仪表盘</p>
+            </div>
+        </div>
+        
+        <div class="current-rates-bar">
+            <span class="rate-indicator">
+                <span class="dot green"></span> USD/CNY 参考: <strong id="ref-usd-cny">7.25</strong>
+            </span>
+            <span class="rate-indicator">
+                <span class="dot blue"></span> USD/INR 参考: <strong id="ref-usd-inr">83.50</strong>
+            </span>
+        </div>
+    </header>
+
+    <div class="app-container">
+        <!-- Main Dashboard Layout -->
+        <main class="dashboard-main">
+            <!-- Left Column: Calculator Inputs Panel -->
+            <section class="calculator-panel card">
+                <div class="tabs-header">
+                    <button class="tab-btn active" id="tab-audit">记账回溯审计 (Forward Audit)</button>
+                    <button class="tab-btn" id="tab-plan">预算购前估算 (Budget Planner)</button>
+                </div>
+
+                <div class="tab-content" id="audit-form-container">
+                    <form id="audit-form">
+                        <!-- Card Presets Selection -->
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">选择您的虚拟卡 (自动加载费率)</h4>
+                            <div class="card-presets" id="audit-card-presets">
+                                <button type="button" class="preset-btn" data-withdraw="1.0" data-deposit="2.0" data-fx="1.6" data-tx="1.0" data-flat="0.0">
+                                    Roogoo 乐享卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="1.5" data-deposit="1.5" data-fx="1.5" data-tx="0.0" data-flat="0.0">
+                                    Dupay 卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="2.0" data-deposit="3.0" data-fx="0.0" data-tx="0.0" data-flat="0.0">
+                                    Fomepay 卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="1.0" data-deposit="1.0" data-fx="2.0" data-tx="0.0" data-flat="0.0">
+                                    自定义
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 1: Buy USDT -->
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">第一步：在欧易买币 (付人民币 ➔ 换成代币)</h4>
+                            <div class="inputs-row">
+                                <div class="input-item">
+                                    <label for="audit-cny-paid">实付人民币 (转账总额)</label>
+                                    <input type="number" id="audit-cny-paid" placeholder="例如：2000" step="0.01" required>
+                                </div>
+                                <div class="input-item" id="audit-usdt-got-wrapper">
+                                    <label for="audit-usdt-got" id="label-audit-usdt-got">买币到账 USDT</label>
+                                    <input type="number" id="audit-usdt-got" placeholder="例如：270" step="0.01" required>
+                                </div>
+                            </div>
+                            <div class="step-summary">
+                                实际买币汇率：<span class="step-metric" id="audit-okx-rate">0.0000</span> CNY/USDT (包含买币溢价)
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Transfer to Card -->
+                        <div class="form-group-section" id="audit-step2-section">
+                            <h4 class="form-section-title">第二步：把代币转入虚拟卡 (从欧易 ➔ 充值到卡)</h4>
+                            <div class="inputs-row four-cols">
+                                <div class="input-item">
+                                    <label for="audit-withdraw-fee">欧易提币网络费 (USDT)</label>
+                                    <input type="number" id="audit-withdraw-fee" placeholder="例如：1.5" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-deposit-rate">虚拟卡充值手续费 (%)</label>
+                                    <input type="number" id="audit-deposit-rate" placeholder="例如：2.0" step="any">
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-deposit-flat">充值固定费 (USD/笔)</label>
+                                    <input type="number" id="audit-deposit-flat" placeholder="例如：0.0" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-fx-fee">卡外汇兑换手续费 (%)</label>
+                                    <input type="number" id="audit-fx-fee" placeholder="例如：1.2" step="any">
+                                </div>
+                            </div>
+                            <div class="step-summary">
+                                预计卡充值损耗：<span class="step-metric" id="audit-deposit-loss">0.00</span> USD
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Purchase AI (Foreign Currency Transaction) -->
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">第三步：在 AI 官网付款 (用卡订阅 ➔ 完成支付)</h4>
+                            <div class="inputs-row three-cols">
+                                <div class="input-item">
+                                    <label for="audit-currency">订阅币种</label>
+                                    <select id="audit-currency">
+                                        <option value="INR" selected>INR (印度卢比 - 便宜区)</option>
+                                        <option value="USD">USD (美元 - 标准区)</option>
+                                        <option value="GBP">GBP (英镑)</option>
+                                        <option value="TRY">TRY (土耳其里拉)</option>
+                                    </select>
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-inr-charged" id="label-audit-inr-charged">AI 官网账单金额</label>
+                                    <input type="number" id="audit-inr-charged" placeholder="例如：11328" step="0.01" required>
+                                </div>
+                                <div class="input-item" id="audit-usd-deducted-wrapper">
+                                    <label for="audit-usd-deducted" id="label-audit-usd-deducted">虚拟卡实际扣除 (USD)</label>
+                                    <input type="number" id="audit-usd-deducted" placeholder="例如：141.6" step="0.01" required>
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-seats">订阅账号席位数</label>
+                                    <input type="number" id="audit-seats" placeholder="例如：2" min="1" step="1" required>
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-tx-fee-spending">消费交易费 (USD/笔)</label>
+                                    <input type="number" id="audit-tx-fee-spending" placeholder="例如：0.21" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="audit-cross-border-fee-spending">消费跨境费 (USD/笔)</label>
+                                    <input type="number" id="audit-cross-border-fee-spending" placeholder="例如：0.33" step="0.01">
+                                </div>
+                            </div>
+                            <div class="step-summary">
+                                实际扣款折合汇率：<span class="step-metric" id="audit-card-fx-rate">0.00000</span> <span id="audit-fx-unit">USD/INR</span>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="submit-btn glow-btn">立即透视费用结构</button>
+                    </form>
+                </div>
+
+                <!-- Planner Form Container (Hidden by default) -->
+                <div class="tab-content hidden" id="plan-form-container">
+                    <form id="plan-form">
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">目标订阅设置</h4>
+                            <div class="inputs-row four-cols">
+                                <div class="input-item">
+                                    <label for="plan-currency">订阅币种</label>
+                                    <select id="plan-currency">
+                                        <option value="INR" selected>INR (印度卢比 - ChatGPT/Claude 便宜区)</option>
+                                        <option value="USD">USD (美元 - 官方标准)</option>
+                                        <option value="GBP">GBP (英镑)</option>
+                                        <option value="TRY">TRY (土耳其里拉)</option>
+                                    </select>
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-price">单价/月 (账单面额)</label>
+                                    <input type="number" id="plan-price" placeholder="例如：2400" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-tax">增值税/GST (%)</label>
+                                    <input type="number" id="plan-tax" placeholder="例如：18" step="any">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-seats">订阅席位数</label>
+                                    <input type="number" id="plan-seats" placeholder="例如：2" min="1">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">链路费率设定 (使用预设)</h4>
+                            <div class="card-presets">
+                                <button type="button" class="preset-btn" data-withdraw="1.0" data-deposit="2.0" data-fx="1.6" data-tx="1.0" data-flat="0.0">
+                                    Roogoo 乐享卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="1.5" data-deposit="1.5" data-fx="1.5" data-tx="0.0" data-flat="0.0">
+                                    Dupay 卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="2.0" data-deposit="3.0" data-fx="0.0" data-tx="0.0" data-flat="0.0">
+                                    Fomepay 卡 (USD)
+                                </button>
+                                <button type="button" class="preset-btn" data-withdraw="1.0" data-deposit="1.0" data-fx="2.0" data-tx="0.0" data-flat="0.0">
+                                    自定义
+                                </button>
+                            </div>
+                            <div class="inputs-row four-cols">
+                                <div class="input-item">
+                                    <label for="plan-withdraw-fee">OKX提币费 (USDT)</label>
+                                    <input type="number" id="plan-withdraw-fee" placeholder="例如：1.0" step="any">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-deposit-rate">卡充值手续费 (%)</label>
+                                    <input type="number" id="plan-deposit-rate" placeholder="例如：2.0" step="any">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-deposit-flat">充值固定费 (USD/笔)</label>
+                                    <input type="number" id="plan-deposit-flat" placeholder="例如：0.0" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-fx-fee">卡非美外汇转换费 (%)</label>
+                                    <input type="number" id="plan-fx-fee" placeholder="例如：1.2" step="any">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-tx-fee-spending">卡消费交易手续费 (%)</label>
+                                    <input type="number" id="plan-tx-fee-spending" placeholder="例如：1.0" step="any">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-group-section">
+                            <h4 class="form-section-title">当前参考汇率设定</h4>
+                            <div class="inputs-row three-cols">
+                                <div class="input-item">
+                                    <label for="plan-okx-cny">OKX买币汇率 (CNY/USDT)</label>
+                                    <input type="number" id="plan-okx-cny" placeholder="例如：7.41" step="0.01">
+                                </div>
+                                <div class="input-item">
+                                    <label for="plan-usd-cny">官方美元汇率 (USD/CNY)</label>
+                                    <input type="number" id="plan-usd-cny" placeholder="例如：7.25" step="0.01">
+                                </div>
+                                <div class="input-item" id="plan-usd-target-wrapper">
+                                    <label for="plan-usd-target" id="label-plan-usd-target">官方参考汇率</label>
+                                    <input type="number" id="plan-usd-target" placeholder="例如：83.50" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="submit-btn glow-btn">测算预算及充值额度</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Right Column: Tabbed Dashboard & Data Center -->
+            <div class="dashboard-tabs card">
+                <!-- Static Card Header -->
+                <h3 class="panel-title" style="margin-bottom: 1.25rem; display: flex; align-items: center; gap: 0.5rem; font-family: 'Outfit', sans-serif; font-size: 1.05rem; font-weight: 600; color: var(--text-primary);">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; color: var(--accent-glow); vertical-align: middle; display: inline-block;">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    费用链路与损耗透视
+                </h3>
+
+                <!-- Tab Content 1: Xray (Pipeline Map + Metrics + Breakdown) -->
+                <div class="dashboard-tab-content" id="content-xray">
+                    <!-- Compact Pipeline Flow -->
+                    <div class="pipeline-flow">
+                        <div class="flow-node active" id="node-cny">
+                            <div class="node-icon">
+                                <svg class="node-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; color: var(--emerald); filter: drop-shadow(0 0 6px rgba(16, 185, 129, 0.4)); display: block;">
+                                    <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"></path>
+                                    <path d="M4 6v12c0 1.1.9 2 2 2h14v-4"></path>
+                                    <path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4z"></path>
+                                </svg>
+                            </div>
+                            <div class="node-name">1. 付出人民币</div>
+                            <div class="node-val" id="flow-val-cny">0.00 CNY</div>
+                        </div>
+                        
+                        <div class="flow-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="arrow-fee" id="flow-fee-okx">买币溢价损耗</span>
+                        </div>
+
+                        <div class="flow-node" id="node-okx">
+                            <div class="node-icon">
+                                <svg class="node-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; color: var(--amber); filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.4)); display: block;">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M12 8v8"></path>
+                                    <path d="M9.5 10.5h3a1.5 1.5 0 0 1 0 3h-2a1.5 1.5 0 0 0 0 3h3"></path>
+                                </svg>
+                            </div>
+                            <div class="node-name">2. 欧易账户 (USDT)</div>
+                            <div class="node-val" id="flow-val-okx">0.00 USDT</div>
+                        </div>
+
+                        <div class="flow-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="arrow-fee" id="flow-fee-withdraw">充值到卡损耗</span>
+                        </div>
+
+                        <div class="flow-node" id="node-card">
+                            <div class="node-icon">
+                                <svg class="node-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; color: var(--indigo); filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.4)); display: block;">
+                                    <rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect>
+                                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="node-name">3. 虚拟卡余额 (美元)</div>
+                            <div class="node-val" id="flow-val-card">0.00 USD</div>
+                        </div>
+
+                        <div class="flow-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <span class="arrow-fee" id="flow-fee-fx">卡片外币折算费</span>
+                        </div>
+
+                        <div class="flow-node" id="node-ai">
+                            <div class="node-icon">
+                                <svg class="node-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width: 24px; height: 24px; color: var(--violet); filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.4)); display: block;">
+                                    <path d="M12 8V4H8"></path>
+                                    <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                                    <path d="M2 14h2"></path>
+                                    <path d="M20 14h2"></path>
+                                    <path d="M15 13v2"></path>
+                                    <path d="M9 13v2"></path>
+                                </svg>
+                            </div>
+                            <div class="node-name">4. 官网付款</div>
+                            <div class="node-val" id="flow-val-ai">0.00 INR</div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Grid -->
+                    <div class="metrics-grid">
+                        <div class="metric-card main-metric">
+                            <span class="metric-label">最终实际支付人民币 (CNY)</span>
+                            <span class="metric-value" id="res-total-cny">¥ 0.00</span>
+                            <span class="metric-desc" id="res-total-cny-desc">包含所有转账与汇率损耗</span>
+                        </div>
+
+                        <div class="metric-card">
+                            <span class="metric-label">账号月均摊 (CNY/账号)</span>
+                            <span class="metric-value text-emerald" id="res-cny-per-seat">¥ 0.00</span>
+                            <span class="metric-desc" id="res-cny-per-seat-desc">按月支付均摊费用</span>
+                        </div>
+
+                        <div class="metric-card">
+                            <span class="metric-label">综合链路损耗率 (流失 %)</span>
+                            <span class="metric-value text-rose" id="res-leak-rate">0.00%</span>
+                            <div class="progress-bar-container mini">
+                                <div class="progress-bar-fill bg-rose" id="res-leak-bar" style="width: 0%"></div>
+                            </div>
+                            <span class="metric-desc" id="res-leak-desc">有 ¥0.00 耗费在手续费与汇差</span>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast" id="app-toast"></div>
+
+    <!-- Core App Logic -->
+    <script src="app.js?v=3.0"></script>
+</body>
+</html>
